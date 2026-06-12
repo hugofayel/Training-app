@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Yougse Training</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #000; color: #fff; min-height: 100vh;
+            display: flex; flex-direction: column; align-items: center;
+            padding: env(safe-area-inset-top) 12px 20px;
+            transition: background 0.3s;
+        }
+        body.pocket-mode { background: #000; }
+        .container { width: 100%; max-width: 500px; }
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin: 10px 0 15px;
+        }
+        h1 { font-size: 1.6rem; }
+        .header-buttons { display: flex; gap: 8px; }
+        .settings-btn, .pocket-btn {
+            background: none; border: none; font-size: 1.5rem; cursor: pointer;
+            padding: 8px; color: #ff9f0a;
+        }
+        #map { height: 250px; border-radius: 16px; margin-bottom: 16px; }
+        .chrono {
+            font-size: 3.5rem; text-align: center; font-variant-numeric: tabular-nums;
+            margin: 10px 0;
+        }
+        .buttons {
+            display: flex; gap: 8px; justify-content: center; margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #ff9f0a; color: #000; border: none;
+            font-size: 1rem; font-weight: 600; padding: 12px 22px;
+            border-radius: 30px; cursor: pointer; transition: opacity 0.2s;
+            white-space: nowrap;
+        }
+        button:active { opacity: 0.7; }
+        button:disabled { background: #555; color: #999; }
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #1c1c1e; border-radius: 14px; padding: 12px;
+            text-align: center;
+        }
+        .stat-value { font-size: 1.8rem; font-weight: bold; }
+        .stat-label { font-size: 0.75rem; color: #aaa; margin-top: 2px; }
+        .graph-container {
+            background: #1c1c1e; border-radius: 14px; padding: 12px;
+            margin-bottom: 20px; display: none;
+        }
+        .history { margin-top: 20px; }
+        .history h2 { font-size: 1.2rem; margin-bottom: 10px; }
+        .session {
+            background: #1c1c1e; border-radius: 10px; padding: 10px; margin-bottom: 8px;
+            display: flex; justify-content: space-between; font-size: 0.9rem;
+        }
+        .totals {
+            margin-top: 16px; background: #1c1c1e; border-radius: 12px; padding: 14px;
+        }
+        .totals p { display: flex; justify-content: space-between; margin-bottom: 6px; }
+        .weight-panel {
+            display: none; margin: 10px 0; text-align: center;
+        }
+        .weight-panel input {
+            width: 80px; text-align: center; padding: 6px;
+            border-radius: 8px; border: 1px solid #ff9f0a;
+            background: #1c1c1e; color: #fff; font-size: 1rem;
+        }
+
+        /* Overlay mode poche */
+        .pocket-overlay {
+            display: none;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999;
+            justify-content: center; align-items: center;
+            flex-direction: column;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .pocket-overlay.active { display: flex; }
+        .pocket-info {
+            text-align: center; color: #fff; pointer-events: none;
+        }
+        .pocket-info .pocket-chrono {
+            font-size: 5rem; font-variant-numeric: tabular-nums;
+            color: #ff9f0a; margin-bottom: 20px;
+        }
+        .pocket-info .pocket-distance {
+            font-size: 2.5rem; color: #fff; margin-bottom: 10px;
+        }
+        .pocket-info .pocket-speed {
+            font-size: 1.8rem; color: #aaa;
+        }
+        .pocket-hint {
+            position: absolute; bottom: 40px; color: #333;
+            font-size: 0.9rem; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Overlay mode poche -->
+<div class="pocket-overlay" id="pocketOverlay" onclick="exitPocketMode()">
+    <div class="pocket-info">
+        <div class="pocket-chrono" id="pocketChrono">00:00:00</div>
+        <div class="pocket-distance" id="pocketDistance">0.00 km</div>
+        <div class="pocket-speed" id="pocketSpeed">0.0 km/h</div>
+    </div>
+    <div class="pocket-hint">Toucher pour sortir du mode poche</div>
+</div>
+
+<div class="container">
+    <div class="header">
+        <h1>🏃 Yougse Training</h1>
+        <div class="header-buttons">
+            <button class="pocket-btn" id="pocketBtn" onclick="enterPocketMode()" title="Mode poche" disabled>🌙</button>
+            <button class="settings-btn" onclick="toggleWeightPanel()" title="Poids">⚙️</button>
+        </div>
+    </div>
+    <div class="weight-panel" id="weightPanel">
+        <label>Poids (kg) : <input type="number" id="weightInput" value="70" min="30" max="200" step="0.5"></label>
+        <button onclick="saveWeight()" style="margin-left: 8px;">OK</button>
+    </div>
+
+    <div id="map"></div>
+    <div class="chrono" id="chrono">00:00:00</div>
+
+    <div class="buttons">
+        <button id="startBtn" onclick="startSession()">▶ Démarrer</button>
+        <button id="stopBtn" onclick="stopSession()" disabled>⏹ Arrêter</button>
+        <button id="resetBtn" onclick="resetSession()" disabled>↺ Reset</button>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value" id="speed">0.0</div>
+            <div class="stat-label">Vitesse (km/h)</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="distance">0.00</div>
+            <div class="stat-label">Distance (km)</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="maxSpeed">0.0</div>
+            <div class="stat-label">Max (km/h)</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="avgSpeed">0.0</div>
+            <div class="stat-label">Moyenne (km/h)</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="calories">0</div>
+            <div class="stat-label">Calories</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="altitude">0</div>
+            <div class="stat-label">Altitude (m)</div>
+        </div>
+    </div>
+
+    <div class="graph-container" id="graphContainer">
+        <canvas id="chart" height="180"></canvas>
+    </div>
+
+    <div class="history">
+        <h2>📋 Sessions</h2>
+        <div id="sessionList">Aucune session pour l'instant.</div>
+    </div>
+    <div class="totals" id="totals">
+        <h3>Totaux</h3>
+        <p><span>Cette semaine</span><span id="weekTotal">0.0 km</span></p>
+        <p><span>Ce mois</span><span id="monthTotal">0.0 km</span></p>
+        <p><span>Cette année</span><span id="yearTotal">0.0 km</span></p>
+    </div>
+</div>
+
+<script>
+    // ============ VARIABLES ============
+    let watchId = null, sessionActive = false, pocketMode = false;
+    let startTime = null, elapsedSeconds = 0, timerInterval = null;
+    let totalDistance = 0, maxSpeed = 0, minSpeed = Infinity;
+    let previousPosition = null;
+    let speedSamples = [];
+    let trackPoints = [];
+    let userWeight = 70;
+    let currentCalories = 0;
+    let currentSpeed = 0, currentAltitude = 0;
+    let wakeLock = null;
+
+    let map, pathPolyline, currentMarker;
+    let chartInstance = null;
+
+    const STORAGE_KEY = 'yougse_sessions';
+    const WEIGHT_KEY = 'yougse_weight';
+
+    // ============ INITIALISATION ============
+    window.addEventListener('load', () => {
+        const savedWeight = localStorage.getItem(WEIGHT_KEY);
+        if (savedWeight) userWeight = parseFloat(savedWeight);
+        document.getElementById('weightInput').value = userWeight;
+
+        map = L.map('map', { attributionControl: false, zoomControl: true }).setView([46.8, 1.7], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+        pathPolyline = L.polyline([], { color: '#ff9f0a', weight: 4 }).addTo(map);
+
+        renderHistory();
+        renderTotals();
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => console.log('SW enregistré', reg))
+                .catch(err => console.warn('SW échec', err));
+        }
+    });
+
+    // ============ WAKE LOCK ============
+    async function requestWakeLock() {
+        try {
+            if ('wakeLock' in navigator) {
+                wakeLock = await navigator.wakeLock.request('screen');
+                wakeLock.addEventListener('release', () => {
+                    console.log('Wake Lock relâché');
+                });
+            }
+        } catch (err) {
+            console.warn('Wake Lock refusé :', err);
+        }
+    }
+
+    async function releaseWakeLock() {
+        if (wakeLock) {
+            try { await wakeLock.release(); } catch(e) {}
+            wakeLock = null;
+        }
+    }
+
+    // ============ GPS ============
+    function startGPS() {
+        if (!navigator.geolocation) {
+            alert("Géolocalisation indisponible.");
+            return;
+        }
+        watchId = navigator.geolocation.watchPosition(
+            pos => {
+                if (!sessionActive) return;
+                const c = pos.coords;
+                const speedMs = c.speed != null ? c.speed : 0;
+                const speedKmh = speedMs * 3.6;
+                const lat = c.latitude, lon = c.longitude;
+                const alt = c.altitude != null ? c.altitude : 0;
+                const now = Date.now();
+
+                currentSpeed = speedKmh;
+                currentAltitude = alt;
+
+                if (previousPosition) {
+                    totalDistance += haversine(previousPosition.lat, previousPosition.lon, lat, lon);
+                }
+                previousPosition = { lat, lon };
+
+                if (speedKmh > maxSpeed) maxSpeed = speedKmh;
+                if (speedKmh > 0 && speedKmh < minSpeed) minSpeed = speedKmh;
+                if (speedKmh > 0) speedSamples.push(speedKmh);
+
+                if (trackPoints.length === 0 || (now - trackPoints[trackPoints.length-1].time) > 2000) {
+                    trackPoints.push({ lat, lon, alt, speed: speedKmh, time: now });
+                }
+
+                updateLiveStats();
+                if (!pocketMode) updateMap(lat, lon);
+            },
+            err => console.warn('Erreur GPS', err),
+            { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+        );
+    }
+
+    function stopGPS() {
+        if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    }
+
+    function haversine(lat1, lon1, lat2, lon2) {
+        const R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    // ============ CARTE ============
+    function updateMap(lat, lon) {
+        if (pocketMode) return;
+        if (!currentMarker) {
+            currentMarker = L.marker([lat, lon]).addTo(map);
+            map.setView([lat, lon], 16);
+        } else {
+            currentMarker.setLatLng([lat, lon]);
+            map.panTo([lat, lon], { animate: false });
+        }
+        pathPolyline.addLatLng([lat, lon]);
+    }
+
+    // ============ CHRONO ============
+    function startChrono() {
+        startTime = Date.now();
+        timerInterval = setInterval(() => {
+            elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+            const timeStr = formatTime(elapsedSeconds);
+            document.getElementById('chrono').textContent = timeStr;
+            document.getElementById('pocketChrono').textContent = timeStr;
+            updateCalories();
+            updatePocketDisplay();
+        }, 1000);
+    }
+
+    function stopChrono() {
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        if (startTime) elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+    }
+
+    function formatTime(sec) {
+        const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    // ============ CALORIES ============
+    function updateCalories() {
+        const hours = elapsedSeconds / 3600;
+        const avgSpeed = speedSamples.length ? speedSamples.reduce((a,b)=>a+b,0)/speedSamples.length : 0;
+        const met = avgSpeed > 0 ? 1 + avgSpeed * 0.9 : 0;
+        currentCalories = Math.round(met * userWeight * hours);
+        document.getElementById('calories').textContent = currentCalories;
+    }
+
+    // ============ STATS LIVE ============
+    function updateLiveStats() {
+        document.getElementById('speed').textContent = currentSpeed.toFixed(1);
+        document.getElementById('distance').textContent = (totalDistance/1000).toFixed(2);
+        document.getElementById('maxSpeed').textContent = maxSpeed.toFixed(1);
+        const avg = speedSamples.length ? speedSamples.reduce((a,b)=>a+b,0)/speedSamples.length : 0;
+        document.getElementById('avgSpeed').textContent = avg.toFixed(1);
+        document.getElementById('altitude').textContent = currentAltitude.toFixed(0);
+    }
+
+    function updatePocketDisplay() {
+        document.getElementById('pocketDistance').textContent = (totalDistance/1000).toFixed(2) + ' km';
+        document.getElementById('pocketSpeed').textContent = currentSpeed.toFixed(1) + ' km/h';
+    }
+
+    // ============ MODE POCHE ============
+    function enterPocketMode() {
+        if (!sessionActive) return;
+        pocketMode = true;
+        document.body.classList.add('pocket-mode');
+        document.getElementById('pocketOverlay').classList.add('active');
+        document.getElementById('pocketBtn').disabled = true;
+        updatePocketDisplay();
+
+        // Baisser luminosité de la carte pour économiser GPU
+        if (map) map.getContainer().style.opacity = '0.3';
+    }
+
+    function exitPocketMode() {
+        pocketMode = false;
+        document.body.classList.remove('pocket-mode');
+        document.getElementById('pocketOverlay').classList.remove('active');
+        document.getElementById('pocketBtn').disabled = false;
+        if (map) map.getContainer().style.opacity = '1';
+
+        // Recentrer la carte sur la dernière position
+        if (currentMarker) {
+            const latlng = currentMarker.getLatLng();
+            map.setView(latlng, 16);
+        }
+    }
+
+    // ============ GESTION SESSION ============
+    function startSession() {
+        if (sessionActive) return;
+        totalDistance = 0; maxSpeed = 0; minSpeed = Infinity;
+        previousPosition = null; speedSamples = []; trackPoints = [];
+        elapsedSeconds = 0; currentCalories = 0;
+        currentSpeed = 0; currentAltitude = 0;
+        sessionActive = true;
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        document.getElementById('resetBtn').disabled = false;
+        document.getElementById('pocketBtn').disabled = false;
+        document.getElementById('chrono').textContent = '00:00:00';
+        document.getElementById('pocketChrono').textContent = '00:00:00';
+        document.getElementById('graphContainer').style.display = 'none';
+        if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+        if (currentMarker) { map.removeLayer(currentMarker); currentMarker = null; }
+        pathPolyline.setLatLngs([]);
+
+        requestWakeLock();
+        startGPS();
+        startChrono();
+    }
+
+    function stopSession() {
+        if (!sessionActive) return;
+        exitPocketMode();
+        sessionActive = false;
+        stopGPS();
+        stopChrono();
+        releaseWakeLock();
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('pocketBtn').disabled = true;
+
+        if (totalDistance > 10) {
+            const avg = speedSamples.length ? speedSamples.reduce((a,b)=>a+b,0)/speedSamples.length : 0;
+            const session = {
+                date: new Date().toISOString(),
+                distance: totalDistance,
+                duration: elapsedSeconds,
+                avgSpeed: avg,
+                maxSpeed: maxSpeed,
+                minSpeed: minSpeed === Infinity ? 0 : minSpeed,
+                calories: currentCalories,
+                trackPoints: trackPoints
+            };
+            saveSession(session);
+            renderHistory();
+            renderTotals();
+            showGraph(session);
+        } else {
+            alert("Distance trop faible, session non enregistrée.");
+            document.getElementById('graphContainer').style.display = 'none';
+        }
+        updateLiveStats();
+    }
+
+    function resetSession() {
+        if (sessionActive) {
+            exitPocketMode();
+            stopGPS(); stopChrono(); sessionActive = false;
+            releaseWakeLock();
+        }
+        totalDistance = 0; maxSpeed = 0; minSpeed = Infinity;
+        previousPosition = null; speedSamples = []; trackPoints = [];
+        elapsedSeconds = 0; currentCalories = 0;
+        currentSpeed = 0; currentAltitude = 0;
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('resetBtn').disabled = true;
+        document.getElementById('pocketBtn').disabled = true;
+        document.getElementById('chrono').textContent = '00:00:00';
+        document.getElementById('pocketChrono').textContent = '00:00:00';
+        document.querySelectorAll('.stat-value').forEach(el => {
+            if (el.id === 'distance') el.textContent = '0.00';
+            else if (el.id === 'altitude' || el.id === 'calories') el.textContent = '0';
+            else el.textContent = '0.0';
+        });
+        if (currentMarker) { map.removeLayer(currentMarker); currentMarker = null; }
+        pathPolyline.setLatLngs([]);
+        document.getElementById('graphContainer').style.display = 'none';
+        if (map) map.getContainer().style.opacity = '1';
+    }
+
+    // ============ STOCKAGE ============
+    function getSessions() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    }
+
+    function saveSession(session) {
+        const sessions = getSessions();
+        sessions.push(session);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    }
+
+    // ============ HISTORIQUE & TOTAUX ============
+    function renderHistory() {
+        const sessions = getSessions();
+        const list = document.getElementById('sessionList');
+        if (sessions.length === 0) { list.innerHTML = 'Aucune session.'; return; }
+        let html = '';
+        sessions.slice().reverse().forEach(s => {
+            const d = new Date(s.date);
+            const dateStr = d.toLocaleDateString('fr-FR', {day:'numeric',month:'short'});
+            const timeStr = d.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
+            html += `<div class="session">
+                <span>${dateStr} ${timeStr}</span>
+                <span>${(s.distance/1000).toFixed(2)} km</span>
+                <span>${formatTime(s.duration)}</span>
+                <span>${s.avgSpeed.toFixed(1)} km/h</span>
+            </div>`;
+        });
+        list.innerHTML = html;
+    }
+
+    function renderTotals() {
+        const sessions = getSessions();
+        const now = new Date();
+        const weekStart = new Date(now); weekStart.setDate(now.getDate()-now.getDay()); weekStart.setHours(0,0,0,0);
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const yearStart = new Date(now.getFullYear(), 0, 1);
+        let w=0, m=0, y=0;
+        sessions.forEach(s => {
+            const date = new Date(s.date);
+            if (date >= weekStart) w += s.distance;
+            if (date >= monthStart) m += s.distance;
+            if (date >= yearStart) y += s.distance;
+        });
+        document.getElementById('weekTotal').textContent = (w/1000).toFixed(1)+' km';
+        document.getElementById('monthTotal').textContent = (m/1000).toFixed(1)+' km';
+        document.getElementById('yearTotal').textContent = (y/1000).toFixed(1)+' km';
+    }
+
+    // ============ GRAPHIQUE ============
+    function showGraph(session) {
+        const pts = session.trackPoints;
+        if (!pts || pts.length < 2) return;
+        const container = document.getElementById('graphContainer');
+        container.style.display = 'block';
+        const ctx = document.getElementById('chart').getContext('2d');
+
+        const labels = pts.map(p => new Date(p.time).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit',second:'2-digit'}));
+        const speeds = pts.map(p => p.speed);
+        const alts = pts.map(p => p.alt);
+
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Vitesse (km/h)',
+                        data: speeds,
+                        borderColor: '#ff9f0a',
+                        backgroundColor: 'transparent',
+                        yAxisID: 'y',
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Altitude (m)',
+                        data: alts,
+                        borderColor: '#00b4d8',
+                        backgroundColor: 'transparent',
+                        yAxisID: 'y1',
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { ticks: { color: '#aaa', maxTicksLimit: 8 } },
+                    y: {
+                        type: 'linear', display: true, position: 'left',
+                        title: { display: true, text: 'km/h', color: '#ff9f0a' },
+                        ticks: { color: '#ff9f0a' }
+                    },
+                    y1: {
+                        type: 'linear', display: true, position: 'right',
+                        title: { display: true, text: 'm', color: '#00b4d8' },
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: '#00b4d8' }
+                    }
+                },
+                plugins: { legend: { labels: { color: '#fff' } } }
+            }
+        });
+    }
+
+    // ============ POIDS ============
+    function toggleWeightPanel() {
+        const panel = document.getElementById('weightPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+    function saveWeight() {
+        userWeight = parseFloat(document.getElementById('weightInput').value);
+        if (isNaN(userWeight) || userWeight < 20) userWeight = 70;
+        localStorage.setItem(WEIGHT_KEY, userWeight);
+        document.getElementById('weightPanel').style.display = 'none';
+        if (sessionActive) updateCalories();
+    }
+</script>
+</body>
+</html>
