@@ -16,9 +16,7 @@
             background: #000; color: #fff; min-height: 100vh;
             display: flex; flex-direction: column; align-items: center;
             padding: env(safe-area-inset-top) 12px 20px;
-            transition: background 0.3s;
         }
-        body.pocket-mode { background: #000; }
         .container { width: 100%; max-width: 500px; }
         .header {
             display: flex; justify-content: space-between; align-items: center;
@@ -26,7 +24,7 @@
         }
         h1 { font-size: 1.6rem; }
         .header-buttons { display: flex; gap: 8px; }
-        .settings-btn, .pocket-btn {
+        button.icon {
             background: none; border: none; font-size: 1.5rem; cursor: pointer;
             padding: 8px; color: #ff9f0a;
         }
@@ -57,6 +55,7 @@
         }
         .stat-value { font-size: 1.8rem; font-weight: bold; }
         .stat-label { font-size: 0.75rem; color: #aaa; margin-top: 2px; }
+        .stat-small { font-size: 0.8rem; color: #ff9f0a; }
         .graph-container {
             background: #1c1c1e; border-radius: 14px; padding: 12px;
             margin-bottom: 20px; display: none;
@@ -65,50 +64,37 @@
         .history h2 { font-size: 1.2rem; margin-bottom: 10px; }
         .session {
             background: #1c1c1e; border-radius: 10px; padding: 10px; margin-bottom: 8px;
-            display: flex; justify-content: space-between; font-size: 0.9rem;
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.9rem; flex-wrap: wrap;
         }
+        .session span { margin: 2px 4px; }
         .totals {
             margin-top: 16px; background: #1c1c1e; border-radius: 12px; padding: 14px;
         }
         .totals p { display: flex; justify-content: space-between; margin-bottom: 6px; }
-        .weight-panel {
+        .weight-panel, .interval-panel {
             display: none; margin: 10px 0; text-align: center;
+            background: #1c1c1e; border-radius: 12px; padding: 12px;
         }
-        .weight-panel input {
-            width: 80px; text-align: center; padding: 6px;
+        .weight-panel input, .interval-panel input {
+            width: 70px; text-align: center; padding: 6px;
             border-radius: 8px; border: 1px solid #ff9f0a;
-            background: #1c1c1e; color: #fff; font-size: 1rem;
+            background: #1c1c1e; color: #fff; font-size: 1rem; margin: 4px;
         }
-
-        /* Overlay mode poche */
+        .interval-panel label { display: block; margin: 8px 0 4px; }
         .pocket-overlay {
-            display: none;
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 9999;
-            justify-content: center; align-items: center;
-            flex-direction: column;
-            cursor: pointer;
-            user-select: none;
-            -webkit-user-select: none;
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999; flex-direction: column;
+            justify-content: center; align-items: center; cursor: pointer;
         }
         .pocket-overlay.active { display: flex; }
-        .pocket-info {
-            text-align: center; color: #fff; pointer-events: none;
-        }
-        .pocket-info .pocket-chrono {
-            font-size: 5rem; font-variant-numeric: tabular-nums;
-            color: #ff9f0a; margin-bottom: 20px;
-        }
-        .pocket-info .pocket-distance {
-            font-size: 2.5rem; color: #fff; margin-bottom: 10px;
-        }
-        .pocket-info .pocket-speed {
-            font-size: 1.8rem; color: #aaa;
-        }
-        .pocket-hint {
-            position: absolute; bottom: 40px; color: #333;
-            font-size: 0.9rem; pointer-events: none;
-        }
+        .pocket-info { text-align: center; pointer-events: none; }
+        .pocket-info .pocket-chrono { font-size: 5rem; color: #ff9f0a; margin-bottom: 20px; }
+        .pocket-info .pocket-distance { font-size: 2.5rem; color: #fff; margin-bottom: 10px; }
+        .pocket-info .pocket-pace { font-size: 1.8rem; color: #aaa; }
+        .pocket-hint { position: absolute; bottom: 40px; color: #333; font-size: 0.9rem; }
+        .interval-phase { font-size: 1.5rem; margin: 10px 0; text-align: center; color: #ff9f0a; }
+        .records { margin-top: 16px; background: #1c1c1e; border-radius: 12px; padding: 14px; }
     </style>
 </head>
 <body>
@@ -118,7 +104,7 @@
     <div class="pocket-info">
         <div class="pocket-chrono" id="pocketChrono">00:00:00</div>
         <div class="pocket-distance" id="pocketDistance">0.00 km</div>
-        <div class="pocket-speed" id="pocketSpeed">0.0 km/h</div>
+        <div class="pocket-pace" id="pocketPace">-'--" /km</div>
     </div>
     <div class="pocket-hint">Toucher pour sortir du mode poche</div>
 </div>
@@ -127,17 +113,30 @@
     <div class="header">
         <h1>🏃 Yougse Training</h1>
         <div class="header-buttons">
-            <button class="pocket-btn" id="pocketBtn" onclick="enterPocketMode()" title="Mode poche" disabled>🌙</button>
-            <button class="settings-btn" onclick="toggleWeightPanel()" title="Poids">⚙️</button>
+            <button class="icon" id="pocketBtn" onclick="enterPocketMode()" title="Mode poche" disabled>🌙</button>
+            <button class="icon" onclick="toggleWeightPanel()" title="Poids">⚖️</button>
+            <button class="icon" onclick="toggleIntervalPanel()" title="Fractionné">⏱️</button>
         </div>
     </div>
+
+    <!-- Panneau Poids -->
     <div class="weight-panel" id="weightPanel">
         <label>Poids (kg) : <input type="number" id="weightInput" value="70" min="30" max="200" step="0.5"></label>
-        <button onclick="saveWeight()" style="margin-left: 8px;">OK</button>
+        <button onclick="saveWeight()">OK</button>
+    </div>
+
+    <!-- Panneau Fractionné -->
+    <div class="interval-panel" id="intervalPanel">
+        <label>Effort (s) <input type="number" id="intervalWork" value="30" min="5"></label>
+        <label>Repos (s) <input type="number" id="intervalRest" value="30" min="5"></label>
+        <label>Répétitions <input type="number" id="intervalReps" value="10" min="1"></label>
+        <button onclick="startInterval()">Lancer fractionné</button>
+        <button onclick="stopInterval()">Arrêter</button>
     </div>
 
     <div id="map"></div>
     <div class="chrono" id="chrono">00:00:00</div>
+    <div class="interval-phase" id="intervalPhase"></div>
 
     <div class="buttons">
         <button id="startBtn" onclick="startSession()">▶ Démarrer</button>
@@ -149,6 +148,7 @@
         <div class="stat-card">
             <div class="stat-value" id="speed">0.0</div>
             <div class="stat-label">Vitesse (km/h)</div>
+            <div class="stat-small" id="pace">-'--" /km</div>
         </div>
         <div class="stat-card">
             <div class="stat-value" id="distance">0.00</div>
@@ -167,8 +167,8 @@
             <div class="stat-label">Calories</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value" id="altitude">0</div>
-            <div class="stat-label">Altitude (m)</div>
+            <div class="stat-value" id="elevation">0</div>
+            <div class="stat-label">D+ (m)</div>
         </div>
     </div>
 
@@ -180,16 +180,26 @@
         <h2>📋 Sessions</h2>
         <div id="sessionList">Aucune session pour l'instant.</div>
     </div>
+
     <div class="totals" id="totals">
         <h3>Totaux</h3>
         <p><span>Cette semaine</span><span id="weekTotal">0.0 km</span></p>
         <p><span>Ce mois</span><span id="monthTotal">0.0 km</span></p>
         <p><span>Cette année</span><span id="yearTotal">0.0 km</span></p>
     </div>
+
+    <div class="records" id="records">
+        <h3>🏆 Records</h3>
+        <p><span>Distance max</span><span id="recDist">-</span></p>
+        <p><span>Meilleure allure</span><span id="recPace">-</span></p>
+        <p><span>Plus longue durée</span><span id="recDur">-</span></p>
+        <p><span>D+ max</span><span id="recElev">-</span></p>
+        <p><span>Vitesse max</span><span id="recSpeed">-</span></p>
+    </div>
 </div>
 
 <script>
-    // ============ VARIABLES ============
+    // ============ VARIABLES GLOBALES ============
     let watchId = null, sessionActive = false, pocketMode = false;
     let startTime = null, elapsedSeconds = 0, timerInterval = null;
     let totalDistance = 0, maxSpeed = 0, minSpeed = Infinity;
@@ -199,8 +209,20 @@
     let userWeight = 70;
     let currentCalories = 0;
     let currentSpeed = 0, currentAltitude = 0;
+    let totalElevationGain = 0;
+    let lastAltitude = null;
     let wakeLock = null;
 
+    // Fractionné
+    let intervalActive = false;
+    let intervalStartTime = 0;      // elapsedSeconds au lancement
+    let intervalWork = 30, intervalRest = 30, intervalReps = 10;
+    let intervalPhase = 0;          // 0 = effort, 1 = repos
+    let intervalCurrentRep = 0;
+    let intervalTimer = null;
+    let audioCtx = null;
+
+    // Carte
     let map, pathPolyline, currentMarker;
     let chartInstance = null;
 
@@ -222,6 +244,7 @@
 
         renderHistory();
         renderTotals();
+        renderRecords();
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js')
@@ -235,27 +258,19 @@
         try {
             if ('wakeLock' in navigator) {
                 wakeLock = await navigator.wakeLock.request('screen');
-                wakeLock.addEventListener('release', () => {
-                    console.log('Wake Lock relâché');
-                });
+                wakeLock.addEventListener('release', () => {});
             }
-        } catch (err) {
-            console.warn('Wake Lock refusé :', err);
-        }
+        } catch (err) {}
     }
 
     async function releaseWakeLock() {
-        if (wakeLock) {
-            try { await wakeLock.release(); } catch(e) {}
-            wakeLock = null;
-        }
+        if (wakeLock) { try { await wakeLock.release(); } catch(e) {} wakeLock = null; }
     }
 
     // ============ GPS ============
     function startGPS() {
         if (!navigator.geolocation) {
-            alert("Géolocalisation indisponible.");
-            return;
+            alert("Géolocalisation indisponible."); return;
         }
         watchId = navigator.geolocation.watchPosition(
             pos => {
@@ -274,6 +289,12 @@
                     totalDistance += haversine(previousPosition.lat, previousPosition.lon, lat, lon);
                 }
                 previousPosition = { lat, lon };
+
+                // Dénivelé positif cumulé
+                if (lastAltitude !== null && alt > lastAltitude) {
+                    totalElevationGain += (alt - lastAltitude);
+                }
+                lastAltitude = alt;
 
                 if (speedKmh > maxSpeed) maxSpeed = speedKmh;
                 if (speedKmh > 0 && speedKmh < minSpeed) minSpeed = speedKmh;
@@ -314,6 +335,15 @@
         pathPolyline.addLatLng([lat, lon]);
     }
 
+    // ============ ALLURE ============
+    function speedToPace(kmh) {
+        if (kmh <= 0) return `-'--"`;
+        const minPerKm = 60 / kmh;
+        const mins = Math.floor(minPerKm);
+        const secs = Math.round((minPerKm - mins) * 60);
+        return `${mins}'${String(secs).padStart(2,'0')}"`;
+    }
+
     // ============ CHRONO ============
     function startChrono() {
         startTime = Date.now();
@@ -324,6 +354,7 @@
             document.getElementById('pocketChrono').textContent = timeStr;
             updateCalories();
             updatePocketDisplay();
+            if (intervalActive) updateIntervalDisplay();
         }, 1000);
     }
 
@@ -349,16 +380,17 @@
     // ============ STATS LIVE ============
     function updateLiveStats() {
         document.getElementById('speed').textContent = currentSpeed.toFixed(1);
+        document.getElementById('pace').textContent = speedToPace(currentSpeed) + ' /km';
         document.getElementById('distance').textContent = (totalDistance/1000).toFixed(2);
         document.getElementById('maxSpeed').textContent = maxSpeed.toFixed(1);
         const avg = speedSamples.length ? speedSamples.reduce((a,b)=>a+b,0)/speedSamples.length : 0;
         document.getElementById('avgSpeed').textContent = avg.toFixed(1);
-        document.getElementById('altitude').textContent = currentAltitude.toFixed(0);
+        document.getElementById('elevation').textContent = totalElevationGain.toFixed(0);
     }
 
     function updatePocketDisplay() {
         document.getElementById('pocketDistance').textContent = (totalDistance/1000).toFixed(2) + ' km';
-        document.getElementById('pocketSpeed').textContent = currentSpeed.toFixed(1) + ' km/h';
+        document.getElementById('pocketPace').textContent = speedToPace(currentSpeed) + ' /km';
     }
 
     // ============ MODE POCHE ============
@@ -369,8 +401,6 @@
         document.getElementById('pocketOverlay').classList.add('active');
         document.getElementById('pocketBtn').disabled = true;
         updatePocketDisplay();
-
-        // Baisser luminosité de la carte pour économiser GPU
         if (map) map.getContainer().style.opacity = '0.3';
     }
 
@@ -380,12 +410,82 @@
         document.getElementById('pocketOverlay').classList.remove('active');
         document.getElementById('pocketBtn').disabled = false;
         if (map) map.getContainer().style.opacity = '1';
-
-        // Recentrer la carte sur la dernière position
         if (currentMarker) {
             const latlng = currentMarker.getLatLng();
             map.setView(latlng, 16);
         }
+    }
+
+    // ============ FRACTIONNÉ ============
+    function toggleIntervalPanel() {
+        const panel = document.getElementById('intervalPanel');
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function startInterval() {
+        if (!sessionActive) { alert("Démarrez d'abord une session."); return; }
+        intervalWork = parseInt(document.getElementById('intervalWork').value) || 30;
+        intervalRest = parseInt(document.getElementById('intervalRest').value) || 30;
+        intervalReps = parseInt(document.getElementById('intervalReps').value) || 10;
+        intervalStartTime = elapsedSeconds;
+        intervalCurrentRep = 1;
+        intervalPhase = 0; // 0=effort, 1=repos
+        intervalActive = true;
+        updateIntervalDisplay();
+        document.getElementById('intervalPanel').style.display = 'none';
+        beep();
+    }
+
+    function stopInterval() {
+        intervalActive = false;
+        document.getElementById('intervalPhase').textContent = '';
+        if (intervalTimer) clearInterval(intervalTimer);
+    }
+
+    function updateIntervalDisplay() {
+        if (!intervalActive) return;
+        const timeInInterval = elapsedSeconds - intervalStartTime;
+        const phaseDuration = intervalPhase === 0 ? intervalWork : intervalRest;
+        const totalCycle = intervalWork + intervalRest;
+        const cycle = Math.floor(timeInInterval / totalCycle);
+        const rep = cycle + 1;
+        const timeInCycle = timeInInterval % totalCycle;
+        let phase, remaining;
+        if (timeInCycle < intervalWork) {
+            phase = 'Effort';
+            remaining = intervalWork - timeInCycle;
+            intervalPhase = 0;
+        } else {
+            phase = 'Repos';
+            remaining = (intervalWork + intervalRest) - timeInCycle;
+            intervalPhase = 1;
+        }
+        if (rep > intervalReps) {
+            phase = 'Terminé';
+            remaining = 0;
+            intervalActive = false;
+            beep();
+            document.getElementById('intervalPhase').textContent = 'Fractionné terminé !';
+            return;
+        }
+        document.getElementById('intervalPhase').textContent =
+            `${phase} ${rep}/${intervalReps} - ${remaining}s`;
+        // Bip aux changements de phase
+        if (remaining === phaseDuration || remaining === 0) beep();
+    }
+
+    function beep() {
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.value = 800;
+            gain.gain.value = 0.1;
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.15);
+        } catch(e) {}
     }
 
     // ============ GESTION SESSION ============
@@ -395,6 +495,7 @@
         previousPosition = null; speedSamples = []; trackPoints = [];
         elapsedSeconds = 0; currentCalories = 0;
         currentSpeed = 0; currentAltitude = 0;
+        totalElevationGain = 0; lastAltitude = null;
         sessionActive = true;
         document.getElementById('startBtn').disabled = true;
         document.getElementById('stopBtn').disabled = false;
@@ -406,6 +507,8 @@
         if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
         if (currentMarker) { map.removeLayer(currentMarker); currentMarker = null; }
         pathPolyline.setLatLngs([]);
+        document.getElementById('intervalPhase').textContent = '';
+        stopInterval();
 
         requestWakeLock();
         startGPS();
@@ -415,6 +518,7 @@
     function stopSession() {
         if (!sessionActive) return;
         exitPocketMode();
+        stopInterval();
         sessionActive = false;
         stopGPS();
         stopChrono();
@@ -433,11 +537,13 @@
                 maxSpeed: maxSpeed,
                 minSpeed: minSpeed === Infinity ? 0 : minSpeed,
                 calories: currentCalories,
+                elevationGain: totalElevationGain,
                 trackPoints: trackPoints
             };
             saveSession(session);
             renderHistory();
             renderTotals();
+            renderRecords();
             showGraph(session);
         } else {
             alert("Distance trop faible, session non enregistrée.");
@@ -449,6 +555,7 @@
     function resetSession() {
         if (sessionActive) {
             exitPocketMode();
+            stopInterval();
             stopGPS(); stopChrono(); sessionActive = false;
             releaseWakeLock();
         }
@@ -456,6 +563,7 @@
         previousPosition = null; speedSamples = []; trackPoints = [];
         elapsedSeconds = 0; currentCalories = 0;
         currentSpeed = 0; currentAltitude = 0;
+        totalElevationGain = 0; lastAltitude = null;
         document.getElementById('startBtn').disabled = false;
         document.getElementById('stopBtn').disabled = true;
         document.getElementById('resetBtn').disabled = true;
@@ -464,13 +572,15 @@
         document.getElementById('pocketChrono').textContent = '00:00:00';
         document.querySelectorAll('.stat-value').forEach(el => {
             if (el.id === 'distance') el.textContent = '0.00';
-            else if (el.id === 'altitude' || el.id === 'calories') el.textContent = '0';
+            else if (el.id === 'elevation' || el.id === 'calories') el.textContent = '0';
             else el.textContent = '0.0';
         });
+        document.getElementById('pace').textContent = `-'--" /km`;
         if (currentMarker) { map.removeLayer(currentMarker); currentMarker = null; }
         pathPolyline.setLatLngs([]);
         document.getElementById('graphContainer').style.display = 'none';
         if (map) map.getContainer().style.opacity = '1';
+        document.getElementById('intervalPhase').textContent = '';
     }
 
     // ============ STOCKAGE ============
@@ -485,26 +595,65 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
     }
 
-    // ============ HISTORIQUE & TOTAUX ============
+    // ============ HISTORIQUE & SUPPRESSION ============
     function renderHistory() {
         const sessions = getSessions();
         const list = document.getElementById('sessionList');
         if (sessions.length === 0) { list.innerHTML = 'Aucune session.'; return; }
         let html = '';
-        sessions.slice().reverse().forEach(s => {
+        for (let i = sessions.length - 1; i >= 0; i--) {
+            const s = sessions[i];
             const d = new Date(s.date);
             const dateStr = d.toLocaleDateString('fr-FR', {day:'numeric',month:'short'});
             const timeStr = d.toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit'});
-            html += `<div class="session">
+            const distKm = (s.distance/1000).toFixed(2);
+            const duration = formatTime(s.duration);
+            const pace = speedToPace(s.avgSpeed);
+            html += `<div class="session" id="session-${i}">
                 <span>${dateStr} ${timeStr}</span>
-                <span>${(s.distance/1000).toFixed(2)} km</span>
-                <span>${formatTime(s.duration)}</span>
+                <span>${distKm} km</span>
+                <span>${duration}</span>
                 <span>${s.avgSpeed.toFixed(1)} km/h</span>
+                <span>${pace} /km</span>
+                <span style="cursor:pointer" onclick="viewSessionOnMap(${i})" title="Voir le parcours">🗺️</span>
+                <span style="cursor:pointer; color:#ff4444" onclick="deleteSession(${i})" title="Supprimer">🗑️</span>
             </div>`;
-        });
+        }
         list.innerHTML = html;
     }
 
+    function viewSessionOnMap(index) {
+        const sessions = getSessions();
+        if (index < 0 || index >= sessions.length) return;
+        const session = sessions[index];
+        if (!session.trackPoints || session.trackPoints.length === 0) {
+            alert("Aucun point GPS pour cette session.");
+            return;
+        }
+        pathPolyline.setLatLngs([]);
+        if (currentMarker) { map.removeLayer(currentMarker); currentMarker = null; }
+        const latlngs = session.trackPoints.map(p => [p.lat, p.lon]);
+        pathPolyline.setLatLngs(latlngs);
+        const bounds = L.latLngBounds(latlngs);
+        map.fitBounds(bounds, { padding: [30, 30] });
+        if (latlngs.length > 0) {
+            currentMarker = L.marker(latlngs[0]).addTo(map).bindPopup('Départ');
+        }
+    }
+
+    function deleteSession(index) {
+        if (!confirm("Supprimer définitivement cette session ?")) return;
+        const sessions = getSessions();
+        sessions.splice(index, 1);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+        renderHistory();
+        renderTotals();
+        renderRecords();
+        pathPolyline.setLatLngs([]);
+        if (currentMarker) { map.removeLayer(currentMarker); currentMarker = null; }
+    }
+
+    // ============ TOTAUX ============
     function renderTotals() {
         const sessions = getSessions();
         const now = new Date();
@@ -523,6 +672,34 @@
         document.getElementById('yearTotal').textContent = (y/1000).toFixed(1)+' km';
     }
 
+    // ============ RECORDS ============
+    function renderRecords() {
+        const sessions = getSessions();
+        if (sessions.length === 0) {
+            document.getElementById('recDist').textContent = '-';
+            document.getElementById('recPace').textContent = '-';
+            document.getElementById('recDur').textContent = '-';
+            document.getElementById('recElev').textContent = '-';
+            document.getElementById('recSpeed').textContent = '-';
+            return;
+        }
+        let maxDist = 0, bestPace = Infinity, maxDur = 0, maxElev = 0, maxSpd = 0;
+        sessions.forEach(s => {
+            if (s.distance > maxDist) maxDist = s.distance;
+            if (s.duration > maxDur) maxDur = s.duration;
+            if (s.maxSpeed > maxSpd) maxSpd = s.maxSpeed;
+            const elev = s.elevationGain || 0;
+            if (elev > maxElev) maxElev = elev;
+            const pace = s.avgSpeed > 0 ? (60 / s.avgSpeed) : Infinity; // min/km
+            if (pace < bestPace) bestPace = pace;
+        });
+        document.getElementById('recDist').textContent = (maxDist/1000).toFixed(2) + ' km';
+        document.getElementById('recPace').textContent = bestPace < Infinity ? speedToPace(60/bestPace) + ' /km' : '-';
+        document.getElementById('recDur').textContent = formatTime(maxDur);
+        document.getElementById('recElev').textContent = maxElev.toFixed(0) + ' m';
+        document.getElementById('recSpeed').textContent = maxSpd.toFixed(1) + ' km/h';
+    }
+
     // ============ GRAPHIQUE ============
     function showGraph(session) {
         const pts = session.trackPoints;
@@ -530,11 +707,9 @@
         const container = document.getElementById('graphContainer');
         container.style.display = 'block';
         const ctx = document.getElementById('chart').getContext('2d');
-
         const labels = pts.map(p => new Date(p.time).toLocaleTimeString('fr-FR', {hour:'2-digit',minute:'2-digit',second:'2-digit'}));
         const speeds = pts.map(p => p.speed);
         const alts = pts.map(p => p.alt);
-
         if (chartInstance) chartInstance.destroy();
         chartInstance = new Chart(ctx, {
             type: 'line',
